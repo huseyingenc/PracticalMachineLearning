@@ -1,89 +1,68 @@
-
----
-title: "Prediction Assigment"
-author: "Huihui Duan"
-date: "June 21, 2014"
-output: ioslides_presentation
----
-
-## Data Cleaning
-
-To clean the data, the first row index and all colomuns with NA were removed. The traing and testing data were saved as traing2.csv and testing2.csv. 
-```{r}
-# Remove everything in current working library
-rm(list = ls())
-# Read cleaned training and testing data 
-training <- read.table(file = "pml-training2.csv", 
-                       header = TRUE, sep = ",", quote = "")
-testing <- read.table(file = "pml-testing2.csv", 
-                      header = TRUE, sep = ",", quote = "")
-# Change the numeric type to integer type to make sure 
-# the same data type in training data and testing data
-training$magnet_dumbbell_z <- as.integer(training$magnet_dumbbell_z)
-training$magnet_forearm_y <- as.integer(training$magnet_forearm_y)
-training$magnet_forearm_z <- as.integer(training$magnet_forearm_z)
-# Change the 
-levels(testing$new_window) <- levels(training$new_window)
-```
-
-
-## Exploratory Data Analysis
-
-Cross Validation was performed to find the out of sample errors. 
-
-```{r}
-# Install randomForest package
-# install.packages("randomForest")
-library(randomForest)
-# install.packages("caret")
 library(caret)
-```
-
-## Exploratory Data Analysis
-```{r}
-set.seed(111)
-# Define cross-validation experiment
-fitControl = trainControl( method = "cv", number = 2)
-# Perform the cross validation
-cv <- train(classe ~ ., data = training, method = "rf", 
-  trControl = fitControl)
-cv$bestTune$mtry
-```
-
-## Exploratory Data Analysis
-```{r}
-cv
-```
-
-## Build random forest model with full training model
-Best Tune of number of variable randomly sampled is: `r cv$bestTune$mtry`
-```{r}
-RandomForest = randomForest(classe ~ ., data = training, 
-                            mtry = cv$bestTune$mtry)
-PredictForTrain = predict(RandomForest)
-table(PredictForTrain, training$classe)
-```
-
-## Predict testing data
-```{r}
-PredictForest = predict(RandomForest, newdata = testing)
-PredictForest
-```
-
-## Write the Prediction to files
-```{r}
-# Function to write a vector to files
-pml_write_files = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0("problem_id_", i ,".txt")
-    write.table(x[i], file = filename, quote = FALSE,
-                row.names = FALSE, col.names = FALSE)
-  }
-}
-# Call the function
-pml_write_files(PredictForest)
-
-```
 
 
+#import data to R
+training1 = read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
+test = read.csv("pml-testing.csv", na.strings=c("", "NA", "NULL"))
+
+
+
+#Remove variables with missing data
+training2 <- training1[ , colSums(is.na(training1)) == 0]
+
+
+
+
+#Remove variables which are irrelevant. 
+
+remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+training3 <- training2[, -which(names(training2) %in% remove)]
+
+
+
+#Remove variables with near zero variability
+zeroVar= nearZeroVar(training3[sapply(training3, is.numeric)], saveMetrics = TRUE)
+training4 = training3[,zeroVar[, 'nzv']==0]
+
+
+#Remove highly correlated independent variables
+corrMatrix <- cor(na.omit(training3[sapply(training3, is.numeric)]))
+corrDF <- expand.grid(row = 1:52, col = 1:52)
+corrDF$correlation <- as.vector(corrMatrix)
+levelplot(correlation ~ row+ col, corrDF)
+removecor = findCorrelation(corrMatrix, cutoff = .90, verbose = TRUE)
+training5 = training4[,-removecor]
+dim(training5)
+
+#set seed to have repeatable results
+set.seed(11111)
+
+#create insample test set
+inTrain <- createDataPartition(y=training5$classe, p=0.7, list=FALSE)
+training <- training5[inTrain,]
+testing <- training5[-inTrain,]
+dim(training)
+dim(testing)
+
+
+
+#load randomForest library for faster results
+require(randomForest)
+
+#built a RF and check variable importance
+rf.training=randomForest(classe~.,data=training, ntree=100, importance=TRUE)
+rf.training
+
+#plot(rf.training, log="y")
+varImpPlot(rf.training,)
+
+
+#Evaluate it on insample test data
+tree.pred=predict(rf.training,testing,type="class")
+predMatrix = with(testing,table(tree.pred,classe))
+
+# error rate
+sum(diag(predMatrix))/sum(as.vector(predMatrix))
+
+answers <- predict(rf.training, testingOrg)
+answers
