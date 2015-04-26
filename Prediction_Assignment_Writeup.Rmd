@@ -1,7 +1,8 @@
+
 library(caret)
 
 
-#import data to R
+###import data to R
 training1 = read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
 test = read.csv("pml-testing.csv", na.strings=c("", "NA", "NULL"))
 
